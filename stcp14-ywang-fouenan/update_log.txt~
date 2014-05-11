@@ -1,0 +1,17 @@
+
+LOGFILE AVANCEMENT DE PROJET (pour y mettre les commentaires plus longs que ceux de "commit")
+
+
+/**********
+10/05/2014
+**********/
+
+DEJA FAIT :
+
+* Succès des échanges SYN, SYNACK, ACK entre client/serveur avec les bon ACK/SEQ, établissement de connexion quasiment fini
+* Modification de fonction demultiplex_packet() pour démultiplexer les sockets de deux types 
+
+A FAIRE :
+
+* Etat ESTABLISHED : transfert de données
+* Les cas de "time_out" pour les états LISTEN, SYNSENT, SYNRCVD

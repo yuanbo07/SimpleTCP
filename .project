@@ -23,4 +23,42 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
+	<filteredResources>
+		<filter>
+			<id>1399407389038</id>
+			<name></name>
+			<type>5</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-*.c</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1399407403915</id>
+			<name>stcp14-ywang-fouenan</name>
+			<type>5</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-*.c</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1399405797311</id>
+			<name>stcp14-ywang-fouenan/inc</name>
+			<type>5</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-*.h</arguments>
+			</matcher>
+		</filter>
+		<filter>
+			<id>1399400082111</id>
+			<name>stcp14-ywang-fouenan/src</name>
+			<type>5</type>
+			<matcher>
+				<id>org.eclipse.ui.ide.multiFilter</id>
+				<arguments>1.0-name-matches-false-false-*.c</arguments>
+			</matcher>
+		</filter>
+	</filteredResources>
 </projectDescription>
