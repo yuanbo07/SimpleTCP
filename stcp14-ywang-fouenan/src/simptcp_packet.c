@@ -10,7 +10,6 @@
 #include <term_colors.h>        /* for colors */
 #define __PREFIX__              "[" COLOR("SIMTCP_PKT", BRIGHT_GREEN) "  ] "
 #include <term_io.h>            /* for printf() and perror() redefinition */
-
 #include <simptcp_packet.h>     /* for simptcp packets*/
 
 

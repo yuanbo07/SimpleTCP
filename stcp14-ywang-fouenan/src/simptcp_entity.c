@@ -57,6 +57,8 @@ int set_non_blocking(int fd)
 #endif
 }
 
+
+
 /*!
  * \fn int demultiplex_packet(char * buffer,struct sockaddr_in * udp_remote)
  * \brief implemente la fonction de demultiplexage de SimpTCP declenchee a l'arrivee d'un PDU SimpTCP. 
@@ -71,11 +73,11 @@ int set_non_blocking(int fd)
  */
 int demultiplex_packet(char * buffer,struct sockaddr_in * udp_remote)
 {
-  struct simptcp_socket * sock = NULL;
+  struct simptcp_socket *sock = NULL;
+  struct simptcp_socket *new_sock = NULL;
   struct sockaddr_in simptcp_remote;
   u_int16_t dport;
   int fd; /* simtcp socket descriptor */
-  int fd_correspondant = -1; // initialized -1 -> il n'est destine pas a socket SimpTCP
   int slen=sizeof(struct sockaddr_in);
 
 #if __DEBUG__
@@ -89,46 +91,58 @@ int demultiplex_packet(char * buffer,struct sockaddr_in * udp_remote)
   simptcp_remote.sin_port = htons(simptcp_get_sport(buffer));
   dport = htons(simptcp_get_dport(buffer));
 
-
-  // cas 1 : traitement PDU qui destine à listening socket (attend un SYN)
-
-
-  // on cherche parmi tous les open sockets
-  for (fd=0;fd<simptcp_entity.open_simptcp_sockets;fd++)
-  {
-	   // on obtient un socket a partir de son descripteur
-	  sock = simptcp_entity.simptcp_socket_descriptors[fd];
-	  // si c'est un listening socket
-	  if (sock->socket_type == listening_server &&
-			  // si son port local correspond au port destinataire de socket (reçu en buffer)
-			  sock->local_simptcp.sin_port == dport)
-	  {
-		  // on met à jour ses adresses destinataires pour delivrer
-		  sock->remote_simptcp = simptcp_remote;
-		  sock->remote_udp = * udp_remote;
-		  fd_correspondant = fd;
-        }
+  /* check if the packet is destined for a non-listening socket */
+	/* this is an inefficient way to fetch for open sockets
+	   could be imporved using the open_sockets_list
+	   which points to the head of the list of open sockets
+	*/
+  for (fd=0;fd< MAX_OPEN_SOCK;fd++)
+    {
+      if ((sock=simptcp_entity.simptcp_socket_descriptors[fd]) != NULL)
+	{ /* this is an open socket ..*/
+	  if (sock->local_simptcp.sin_port == dport
+	      && sock->remote_simptcp.sin_addr.s_addr == simptcp_remote.sin_addr.s_addr
+	     && sock->remote_simptcp.sin_port == simptcp_remote.sin_port)
+	    { /* this is the fetched socket */
+#if __DEBUG__
+	      printf("Delivering packet to socket fd %u at state %s\n",
+		     fd, simptcp_socket_state_get_str(sock->socket_state));
+#endif
+	      return fd;
+	    }
+	}
     }
+   /* now, check if the packet is destined for a listening sock */
+  for (fd=0;fd< MAX_OPEN_SOCK;fd++)
+    {
+      if ((sock=simptcp_entity.simptcp_socket_descriptors[fd]) != NULL)
+	{
+	  if ((sock->local_simptcp.sin_port == dport)
+	      && (sock->socket_type == listening_server))
+	    { /* this is the fetched listening socket */
+#if __DEBUG__
+	      printf("Delivering packet to socket fd %u at state %s\n",
+		     fd, simptcp_socket_state_get_str(sock->socket_state));
+#endif
+	      /* for a listening socket an additionnal work is needed :
+		 save the remote udp/simpTCP addresses; they will be used
+		 when processing the received pdu
+	       */
+	      lock_simptcp_socket(sock);
 
-  // cas 2 : traitement de non listening socket
+	      memcpy(&(sock->remote_simptcp),&simptcp_remote,slen);
+	      memcpy(&(sock->remote_udp),udp_remote,slen);
+	      unlock_simptcp_socket(sock);
 
-
-  // on cherche parmi tous les open sockets
-  for (fd=0;fd<simptcp_entity.open_simptcp_sockets;fd++){
-	  // on obtient un socket a partir de son descripteur
-	  sock = simptcp_entity.simptcp_socket_descriptors[fd];
-	  // si ce n'est pas un listening socket
-	  if (sock->socket_type != listening_server &&
-			  // si son adresse attendue correspond à l'adresse de socket reçu en buffer
-			  sock->remote_simptcp.sin_addr.s_addr == simptcp_remote.sin_addr.s_addr &&
-			  // si son port attendu correspond au port de socket reçu en buffer
-			  sock->remote_simptcp.sin_port == simptcp_remote.sin_port &&
-			  // si son port local correspond au port destinataire de socket
-			  sock->local_simptcp.sin_port == dport)
-		  fd_correspondant = fd;
-  }
-
- return fd_correspondant;
+	      return fd;
+	    }
+	}
+    }
+  /* No match found */
+#if __DEBUG__
+  printf("No Match found \n");
+#endif
+ return -1;
 }
 
 /*!
