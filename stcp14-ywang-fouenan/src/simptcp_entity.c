@@ -58,7 +58,6 @@ int set_non_blocking(int fd)
 }
 
 
-
 /*!
  * \fn int demultiplex_packet(char * buffer,struct sockaddr_in * udp_remote)
  * \brief implemente la fonction de demultiplexage de SimpTCP declenchee a l'arrivee d'un PDU SimpTCP. 

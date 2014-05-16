@@ -103,10 +103,7 @@ void init_simptcp_socket(struct simptcp_socket *sock, unsigned int lport)
     sock->local_simptcp.sin_family = AF_INET;
     sock->local_simptcp.sin_addr.s_addr = htonl(INADDR_ANY); /* htonl() host to network long*/
     sock->local_simptcp.sin_port = htons(lport);
-
     memset(&(sock->remote_simptcp), 0, sizeof (struct sockaddr));
-
-
     sock->socket_state = &(simptcp_entity.simptcp_socket_states->closed);
 
     /* protocol entity sending side */
@@ -116,6 +113,7 @@ void init_simptcp_socket(struct simptcp_socket *sock, unsigned int lport)
     sock->out_len=0;
     sock->nbr_retransmit=0;
     sock->timer_duration=1500;
+
     /* protocol entity receiving side */
     sock->socket_state_receiver=-1;
     sock->next_ack_num=0;
@@ -426,10 +424,6 @@ int closed_simptcp_socket_state_passive_open (struct simptcp_socket* sock, int n
   sock->max_conn_req_backlog = n;
   // on loue la mémoire pour la file d'attente des demandes de connexion au maximal
   sock->new_conn_req = malloc(n*sizeof(struct simptcp_socket**));
-  // si le buffer n'a rien reçu, il attend (pour rester dans état LISTEN)
-  while(sock->in_len == 0){
-  }
-  // une fois le buffer de réception a reçu un PDU, renvoie succès
   return 0;
 }
 
@@ -595,34 +589,40 @@ int listen_simptcp_socket_state_accept (struct simptcp_socket* sock, struct sock
 #if __DEBUG__
     printf("function %s called\n", __func__);
 #endif
-	// le accept() est bloquant
-  while (sock->pending_conn_req == 0){
-  }
-
-  // on crée un socket fils
+	// le accept() est bloquant tant qu'aucune connexion n'a été établie
+  while (sock->pending_conn_req == 0);
+  // on crée un socket fils pour traiter le dernier PDU qu'on a reçu
   int fd_sock_fils = create_simptcp_socket();
-  // on cherche le socket qui correspond à descripteur de ce socket fils
+  // on obtient le socket qui correspond à descripteur de ce socket fils
   struct simptcp_socket * sock_fils = simptcp_entity.simptcp_socket_descriptors[fd_sock_fils];
-  // le socket passe à l'état SYNRCVD
+  // le socket fils doit être à l'état SYNRCVD
   sock_fils->socket_state=&(simptcp_entity.simptcp_socket_states->synrcvd);
   // le socket est de type non listening
   sock_fils->socket_type = nonlistening_server;
-  // on ajoute ce socket temporaire à la file d'attente de socket
-  sock->new_conn_req[sock->pending_conn_req - 1] = sock_fils;
-  // on envoie le PDU SYNACK
+  // on met le numéro de séquence le même que son père
+  sock_fils->next_seq_num = sock->next_seq_num ;
+  // pour faciliter la mise à jour, on crée un pointeur ici
+  struct simptcp_socket * last_received_socket = sock->new_conn_req[sock->pending_conn_req-1];
+  // on copie les infos dans le socket fils : pas propre, à refaire ça
+  sock_fils->remote_simptcp = last_received_socket->remote_simptcp;
+  sock_fils->remote_udp = last_received_socket->remote_udp;
+  sock_fils->local_simptcp = last_received_socket->local_simptcp;
+  sock_fils->next_ack_num = last_received_socket->next_ack_num;
+
+  // on onvoie le PDU SYNACK par socket fils
   send_pdu_flag(sock_fils,SYNACK);
-  // on lance le timer
-  start_timer(sock_fils,sock_fils->timer_duration);
-  // on passe le socket fils à état SYNRCVD
-  sock_fils->socket_state = &(simptcp_entity.simptcp_socket_states->synrcvd);
+  // afficher le SYNACK qu'on vient d'envoyer
   printf("*** côté SERVER : J'ai envoyé un SYNACK pour répondre à client. *** \n");
   simptcp_lprint_packet(sock_fils->out_buffer);
-  // on incrémente le numéro SEQ
-  sock_fils->next_seq_num ++;
-  // on décremente le nombre de demandes non traitées
-  //sock->pending_conn_req-- ;
 
-  return 0;
+  // on lance le timer
+  start_timer(sock_fils,sock_fils->timer_duration);
+
+  // on décremente le nombre de demandes non traitées
+  sock->pending_conn_req --;
+
+  // on retourne le descripteur de socket fils
+  return fd_sock_fils;
 }
 
 /**
@@ -727,12 +727,21 @@ void listen_simptcp_socket_state_process_simptcp_pdu (struct simptcp_socket* soc
 #endif
 // si on reçoit un SYN
   if (simptcp_get_flags(buf)==SYN){
-	  // on l'affiche
+
+	  // on l'affiche le PDU reçu
 	  printf("*** côté SERVER : J'ai reçu un SYN. *** \n");
 	  simptcp_lprint_packet(buf);
-	  // on recupère le numéro d'aquittement attendu de PDU reçu le plus récent pour le socket fils
-	  sock->next_ack_num = simptcp_get_seq_num(buf) + 1;
-	  // on incrémente le nombre de demande de connecions qui ne sont pas traitées
+
+	  // on loue un mémoire pour ce PDU dans la file d'attente de socket père
+	  sock->new_conn_req[sock->pending_conn_req] = malloc(sizeof(struct simptcp_socket));
+	  // pour faciliter la mise à jour, on crée un pointeur ici
+	  struct simptcp_socket * last_received_socket = sock->new_conn_req[sock->pending_conn_req];
+	  // on mis à jour les infos de cette nouvelle demande de connexion pour qu'on puisse traiter dans accept
+	  last_received_socket->remote_simptcp = sock->remote_simptcp;
+	  last_received_socket->remote_udp = sock->remote_udp;
+	  last_received_socket->local_simptcp = sock->local_simptcp;
+	  last_received_socket->next_ack_num = simptcp_get_seq_num(buf) + 1;
+	  // on incrémente le nombre de demande de connexions et passe à l'appel accept
 	  sock->pending_conn_req ++;
   }
   else
@@ -949,7 +958,7 @@ void synsent_simptcp_socket_state_process_simptcp_pdu (struct simptcp_socket* so
     	// on incrémente le numéro ACK de PDU à envoyer
     	sock->next_ack_num = simptcp_get_seq_num(buf) + 1;
     	//on renvoie un ACK
-    	printf("*** côté CLIENT : Suite à la reception de SYNACK, j'ai envoyé un ACK. *** \n");
+    	printf("*** côté CLIENT : Suite à la réception de SYNACK, j'ai envoyé un ACK. *** \n");
     	send_pdu_flag(sock,ACK);
     	simptcp_lprint_packet(sock->out_buffer);
     	// le socket passe à l'état ESTABLISHED
@@ -973,10 +982,11 @@ void synsent_simptcp_socket_state_handle_timeout (struct simptcp_socket* sock)
 #if __DEBUG__
   printf("function %s called\n", __func__);
 #endif
+	sock->socket_state = &(simptcp_entity.simptcp_socket_states->closed);
   //On retransmit le paquet
-        send_pdu_flag(sock,ACK);
+        //send_pdu_flag(sock,ACK);
   //On relance un timer
-        start_timer(sock,sock->timer_duration);
+        //start_timer(sock,sock->timer_duration);
 }
 
 
@@ -1365,6 +1375,40 @@ void established_simptcp_socket_state_process_simptcp_pdu (struct simptcp_socket
 #if __DEBUG__
   printf("function %s called\n", __func__);
 #endif
+
+  /* ***** CETTE FONCTIONNNE NE COMPILE PAS ******
+  if ((sock->socket_type == client) && (sock->socket_state_sender = wait_ack))
+  { // cote du sender
+	  if (simptcp_get_flags(buf) == FIN){
+		  // on envoie un ACK
+		  //passe à closewait
+		  sock->socket_state = &(simptcp_entity.simptcp_socket_states->closewait);
+	  }
+  if(simptcp_get_flags(buf) == (ACK))
+  {
+	  if ((simptcp_get_ack_num(buf) == sock->next_seq_num) &&(simptcp_check_checksum(buf))){
+		  stop_timer(sock);// on arrete le timer
+		  sock->socket_state_sender = wait_message;
+	  }
+  }
+  }
+  if (sock->socket_state_sender == wait_packet)
+  {// cote du reicever
+	  if (simptcp_get_flags(buf) == FIN){
+	  // on envoie un ACK
+	  //passe à l'état closewait
+		  sock->socket_state = &(simptcp_entity.simptcp_socket_states->closewait);
+	  }
+	  if (!(simptcp_get_flags(buf))){
+		  if ((simptcp_get_ack_num(buf) == sock->next_seq_num) &&(simptcp_check_checksum(buf))) {
+			  //on copie le paquet dans le buffer du socket simptcp, et on verifie que c'est un syn ack ou syn
+			  simptcp_extract_data(buf,sock->in_buffer);
+			  // on envoie un ACK
+			  //on incrémente l'ack num
+			  sock->next_ack_num++;
+		  }
+	  }
+  }*/
 }
 
 /**
