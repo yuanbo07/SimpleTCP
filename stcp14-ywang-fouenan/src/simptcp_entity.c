@@ -97,7 +97,7 @@ int demultiplex_packet(char * buffer,struct sockaddr_in * udp_remote)
 	*/
   for (fd=0;fd< MAX_OPEN_SOCK;fd++)
     {
-      if ((sock=simptcp_entity.simptcp_socket_descriptors[fd]) != NULL)
+      if ((sock=simptcp_entity.simptcp_socket_descriptors[fd]) != NULL )
 	{ /* this is an open socket ..*/
 	  if (sock->local_simptcp.sin_port == dport
 	      && sock->remote_simptcp.sin_addr.s_addr == simptcp_remote.sin_addr.s_addr

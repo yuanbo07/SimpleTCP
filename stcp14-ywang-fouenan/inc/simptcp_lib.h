@@ -256,7 +256,8 @@ typedef struct simptcp_socket_states_funcs {
     simptcp_socket_state_funcs timewait;
 } simptcp_socket_states_funcs;
 
-
+/* Declaration of extern functions */
+extern void simptcp_lprint_packet (char * buf);
 
 /* Fill a struct simptcp_socket with default values */
 int create_simptcp_socket();
@@ -269,7 +270,7 @@ int has_active_timer(struct simptcp_socket * sock);
 
 /* Create and send PDU */
 void send_pdu_flag(struct simptcp_socket * sock, char flag);
-void send_pdu_data(struct simptcp_socket * sock, const void * buf, size_t n);
+ssize_t send_pdu_data(struct simptcp_socket * sock, const void * buf, size_t n);
 
 
 #endif // _SIMPTCP_LIB_H_
