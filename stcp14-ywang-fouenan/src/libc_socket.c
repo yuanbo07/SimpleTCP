@@ -4,7 +4,7 @@
 
 #include <stdio.h>              /* for printf() */
 #include <netdb.h>              /* for struct sockaddr and socklen_t */
-
+#include <libc_socket.h>
 #define __USE_GNU
 #include <dlfcn.h>              /* for dlsym(), */
 #include <term_colors.h>        /* for color macros */
@@ -50,6 +50,20 @@ static int (*getsockopt_ptr) (int fd, int level, int optname, void *optval,
                              socklen_t *optlen);
 static int (*setsockopt_ptr) (int fd, int level, int optname, const void *optval,
                              socklen_t optlen);
+
+
+/*Function to be used to generate random loss 
+ *return 1 with probability p and 0 with a probability 1-p
+ */
+int flip_coin(double p)
+{
+#if __DEBUG__
+    printf("function %s called\n", __func__);
+#endif
+    srand(time(NULL));
+    return p> ((double)rand() / (double)RAND_MAX) ;
+}
+
 
 /* Functions that wraps the libc. Basically initialize a function pointer the
  * first time a function is called, and then directly call the libc socket api
@@ -123,9 +137,18 @@ ssize_t libc_sendto(int fd, const void *buf, size_t n, int flags,
 
     INIT_FUNCTION_POINTER(sendto);
     CHECK_FUNCTION_POINTER(sendto);
+    if (flip_coin(PKT_ERROR_RATE)) {
+        #if __DEBUG__
+        printf("Packet has been randomly dropped\n");
+        #endif
+        return 0;
+     }
+    
     
     return sendto_ptr(fd, buf, n, flags, addr, addr_len);
 }
+
+
 ssize_t libc_recvfrom(int fd, void *buf, size_t n, int flags, 
                       struct sockaddr *addr, socklen_t *addr_len)
 {

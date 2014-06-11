@@ -7,6 +7,14 @@
 
 
 #include <sys/socket.h>
+#define PKT_ERROR_RATE 0
+#define RAND_MAX 10
+
+
+/*Function to be used to generate random loss 
+ *return 1 with probability p and 0 with a probability 1-p
+ */
+int flip_coin(double p);
 
 
 /* Functions that wraps the libc. Basically initialize a function pointer the

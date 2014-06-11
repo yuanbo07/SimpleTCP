@@ -20,7 +20,7 @@
 
 #define SERVER_PORT 15556 /* Default server port*/
 
-
+#define MSL_TIME 500 /* Maximum segment life, here we use 500 ms just as an example, normally it's 2 mins */
 
 /*!
  * \var socket_types
